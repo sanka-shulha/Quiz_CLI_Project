@@ -1,0 +1,5 @@
+DB_NAME = "quiz_shulha"
+DB_USER = "postgres"
+DB_PASSWORD = "qG2adH4mpR"
+DB_HOST = "localhost"
+DB_PORT = "5432"
