@@ -5,7 +5,7 @@ MAX_Q = 20
 
 
 def start_quiz(user_id: int):
-    """Звичайна вікторина: користувач обирає категорію (лише активні)."""
+    """Вікторина по вибраній (активній) категорії."""
     conn = connect()
     if not conn:
         print("Проблема з базою")
@@ -15,7 +15,6 @@ def start_quiz(user_id: int):
     try:
         cur = conn.cursor()
 
-        # активні категорії тільки
         cur.execute("SELECT id, name FROM categories WHERE is_active = TRUE ORDER BY id")
         categories = cur.fetchall()
 
@@ -23,27 +22,43 @@ def start_quiz(user_id: int):
             print("Немає активних категорій.")
             return
 
+
         print("\nОбери категорію:")
-        for cid, name in categories:
-            print(f"{cid} - {name}")
+        for i, (cid, name) in enumerate(categories, start=1):
+            print(f"{i} - {name}")
         print("0 - Назад")
 
         choice = input("Номер категорії: ").strip()
         if choice == "0":
             return
 
-        try:
-            cat_id = int(choice)
-        except ValueError:
+        if not choice.isdigit():
             print("Введи число!")
             return
 
+        idx = int(choice)
+        if idx < 1 or idx > len(categories):
+            print("Такої активної категорії немає")
+            return
 
-        cur.execute("SELECT id FROM categories WHERE id = %s AND is_active = TRUE", (cat_id,))
+
+        cat_id = categories[idx - 1][0]
+
+
+        cur.execute(
+            "SELECT id FROM categories WHERE id = %s AND is_active = TRUE",
+            (cat_id,)
+        )
         if not cur.fetchone():
             print("Такої активної категорії немає")
             return
 
+
+        cur.execute("SELECT COUNT(*) FROM questions WHERE category_id = %s", (cat_id,))
+        q_count = cur.fetchone()[0]
+        if q_count < MAX_Q:
+            print(f"Недостатньо питань у категорії: є {q_count}, потрібно мінімум {MAX_Q}.")
+            return
 
         cur.execute(
             """
@@ -55,15 +70,10 @@ def start_quiz(user_id: int):
         )
         qs = cur.fetchall()
 
-        if not qs:
-            print("Питань у цій категорії немає")
-            return
-
         random.shuffle(qs)
         qs = qs[:MAX_Q]
 
         score = run_questions(qs)
-
 
         cur.execute(
             """
@@ -78,7 +88,7 @@ def start_quiz(user_id: int):
     except Exception as e:
         try:
             conn.rollback()
-        except:
+        except Exception:
             pass
         print("Помилка:", e)
 
@@ -86,13 +96,13 @@ def start_quiz(user_id: int):
         try:
             if cur:
                 cur.close()
-        except:
+        except Exception:
             pass
         conn.close()
 
 
 def start_mixed_quiz(user_id: int):
-    """БОНУС: змішана вікторина — 20 випадкових питань з усіх категорій."""
+    """Змішана вікторина — 20 випадкових питань з усіх категорій."""
     conn = connect()
     if not conn:
         print("Проблема з базою")
@@ -102,7 +112,6 @@ def start_mixed_quiz(user_id: int):
     try:
         cur = conn.cursor()
 
-
         cur.execute(
             """
             SELECT text, option_a, option_b, option_c, option_d, correct_option
@@ -111,8 +120,8 @@ def start_mixed_quiz(user_id: int):
         )
         qs = cur.fetchall()
 
-        if not qs:
-            print("Питань у базі немає.")
+        if len(qs) < MAX_Q:
+            print(f"Недостатньо питань у базі: є {len(qs)}, потрібно мінімум {MAX_Q}.")
             return
 
         random.shuffle(qs)
@@ -120,7 +129,6 @@ def start_mixed_quiz(user_id: int):
 
         print("\n=== Змішана вікторина (20 питань) ===")
         score = run_questions(qs)
-
 
         cur.execute("SELECT id FROM categories WHERE name = %s", ("Змішана вікторина",))
         row = cur.fetchone()
@@ -135,7 +143,6 @@ def start_mixed_quiz(user_id: int):
             mixed_cat_id = cur.fetchone()[0]
             conn.commit()
 
-
         cur.execute(
             """
             INSERT INTO results (user_id, category_id, score, total_questions)
@@ -149,7 +156,7 @@ def start_mixed_quiz(user_id: int):
     except Exception as e:
         try:
             conn.rollback()
-        except:
+        except Exception:
             pass
         print("Помилка:", e)
 
@@ -157,30 +164,41 @@ def start_mixed_quiz(user_id: int):
         try:
             if cur:
                 cur.close()
-        except:
+        except Exception:
             pass
         conn.close()
 
 
-def run_questions(qs):
+def ask_answer() -> str:
+    """Валідація відповіді: тільки a/b/c/d."""
+    while True:
+        ans = input("Відповідь (a/b/c/d): ").strip().lower()
+        if ans in ("a", "b", "c", "d"):
+            return ans
+        print("Введи тільки a, b, c або d.")
+
+
+def run_questions(qs) -> int:
     """Показує питання і повертає кількість правильних відповідей."""
     score = 0
     total = len(qs)
 
     for i, q in enumerate(qs, 1):
-        print(f"\nПитання {i}/{total}: {q[0]}")
-        print(f"a) {q[1]}")
-        print(f"b) {q[2]}")
-        print(f"c) {q[3]}")
-        print(f"d) {q[4]}")
+        text, a, b, c, d, correct = q
 
-        ans = input("Відповідь (a/b/c/d): ").strip().lower()
+        print(f"\nПитання {i}/{total}: {text}")
+        print(f"a) {a}")
+        print(f"b) {b}")
+        print(f"c) {c}")
+        print(f"d) {d}")
 
-        if ans == q[5]:
+        ans = ask_answer()
+
+        if ans == correct:
             score += 1
             print("Правильно!")
         else:
-            print(f"Ні, правильна: {q[5]}")
+            print(f"Ні, правильна: {correct}")
 
     print(f"\nТи набрав {score} з {total}")
     return score
