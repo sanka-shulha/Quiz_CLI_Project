@@ -1,6 +1,6 @@
 from auth import register, login, change_password, change_birth_date
 from quiz import start_quiz, start_mixed_quiz
-from reports import my_results, top_20, export_my_results_csv
+from reports import my_results, top_20, export_my_results_csv, report_questions_in_active_categories
 from admin import is_admin, admin_menu
 
 
@@ -17,8 +17,9 @@ def menu_logged_in(is_admin_user: bool):
     print("5 - Змінити дату народження")
     print("6 - Експорт моїх результатів (CSV)")
     print("7 - Змішана вікторина (20 питань з різних категорій) [BONUS]")
+    print("8 - Звіт: кількість питань в активних категоріях")
     if is_admin_user:
-        print("8 - Адмін-панель (категорії) [BONUS]")
+        print("9 - Адмін-панель (категорії) [BONUS]")
     print("0 - Вихід")
 
 
@@ -56,7 +57,10 @@ while True:
         elif вибір == "7":
             start_mixed_quiz(user_id)
 
-        elif вибір == "8" and admin_flag:
+        elif вибір == "8":
+            report_questions_in_active_categories()
+
+        elif вибір == "9" and admin_flag:
             admin_menu()
 
         elif вибір == "0":

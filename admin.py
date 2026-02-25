@@ -23,6 +23,10 @@ def is_admin(user_id: int) -> bool:
         row = cur.fetchone()
         return bool(row and row[0] is True)
     except Exception:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
         return False
     finally:
         try:
@@ -95,8 +99,11 @@ def add_category():
         print("Назва не може бути порожньою.")
         return
 
-    db_add_category(name)
-    print("Готово.")
+    new_id = db_add_category(name)
+    if new_id:
+        print("Готово.")
+    else:
+        print("Не вдалося додати категорію.")
 
 
 def edit_category():
@@ -110,9 +117,6 @@ def edit_category():
 
     cat_id = int(raw)
 
-    new_name = input("Нова назва (Enter - залишити без змін): ").strip()
-    active_input = input("Активна? (y/n, Enter - залишити як є): ").strip().lower()
-
     rows = list_categories()
     current = next((r for r in rows if r[0] == cat_id), None)
     if not current:
@@ -120,6 +124,9 @@ def edit_category():
         return
 
     current_name, current_active = current[1], current[2]
+
+    new_name = input("Нова назва (Enter - залишити без змін): ").strip()
+    active_input = input("Активна? (y/n, Enter - залишити як є): ").strip().lower()
 
     if not new_name:
         new_name = current_name
@@ -129,8 +136,11 @@ def edit_category():
     else:
         is_active = True if active_input in ("y", "yes", "1", "так", "t") else False
 
-    update_category(cat_id, new_name, is_active)
-    print("Категорію оновлено.")
+    ok = update_category(cat_id, new_name, is_active)
+    if ok:
+        print("Категорію оновлено.")
+    else:
+        print("Не вдалося оновити категорію.")
 
 
 def remove_category():
@@ -142,8 +152,18 @@ def remove_category():
         print("Потрібно ввести число.")
         return
 
-    delete_category(int(raw))
-    print("Категорію видалено.")
+    cat_id = int(raw)
+
+    confirm = input("Підтвердити видалення (деактивацію) категорії? (y/n): ").strip().lower()
+    if confirm not in ("y", "yes", "1", "так", "t"):
+        print("Скасовано.")
+        return
+
+    ok = delete_category(cat_id)  # safe-delete (is_active = FALSE)
+    if ok:
+        print("Категорію видалено.")
+    else:
+        print("Не вдалося видалити категорію.")
 
 
 def questions_menu():
@@ -224,12 +244,14 @@ def add_question():
 
     correct = _ask_correct_letter()
 
-    db_add_question(category_id, text, a, b, c, d, correct)
-    print("Питання додано.")
+    new_id = db_add_question(category_id, text, a, b, c, d, correct)
+    if new_id:
+        print("Питання додано.")
+    else:
+        print("Не вдалося додати питання.")
 
 
 def edit_question():
-
     show_questions()
     raw = input("ID питання для оновлення (0 - назад): ").strip()
     if raw == "0":
@@ -243,7 +265,6 @@ def edit_question():
     if not q:
         print("Такого питання немає.")
         return
-
 
     _, category_id, old_text, old_a, old_b, old_c, old_d, old_correct = q
 
@@ -260,8 +281,11 @@ def edit_question():
         print("Неправильна відповідь.")
         return
 
-    update_question(question_id, text, a, b, c, d, correct)
-    print("Питання оновлено.")
+    ok = update_question(question_id, text, a, b, c, d, correct)
+    if ok:
+        print("Питання оновлено.")
+    else:
+        print("Не вдалося оновити питання.")
 
 
 def remove_question():
@@ -273,5 +297,8 @@ def remove_question():
         print("Потрібно ввести число.")
         return
 
-    delete_question(int(raw))
-    print("Питання видалено.")
+    ok = delete_question(int(raw))
+    if ok:
+        print("Питання видалено.")
+    else:
+        print("Не вдалося видалити питання.")

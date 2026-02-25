@@ -1,8 +1,13 @@
--- Seed data generated from exported questions CSV
+
 BEGIN;
--- Admin user
+
 INSERT INTO users (login, password, birth_date, is_admin)
-VALUES ('admin', 'admin123', '2000-01-01', TRUE)
+VALUES (
+  'admin',
+  '$2b$12$z0xG10kKz3kzv2d3oQbHc.4b8FfC2cB5bW5lq2mVqQ8p9lqQ9nJPe',
+  '2000-01-01',
+  TRUE
+)
 ON CONFLICT (login) DO NOTHING;
 
 -- Categories

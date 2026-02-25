@@ -1,5 +1,6 @@
 import os
 import psycopg2
+from psycopg2 import errors
 from config import DB_NAME, DB_USER, DB_PASSWORD, DB_HOST, DB_PORT
 
 
@@ -19,7 +20,6 @@ def connect():
         return None
 
 
-
 def list_categories():
     conn = connect()
     if not conn:
@@ -32,6 +32,13 @@ def list_categories():
                 ORDER BY id;
             """)
             return cur.fetchall()
+    except Exception:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        print("Помилка читання категорій.")
+        return []
     finally:
         conn.close()
 
@@ -49,6 +56,23 @@ def add_category(name):
             new_id = cur.fetchone()[0]
         conn.commit()
         return new_id
+
+    except errors.UniqueViolation:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        print("Категорія з такою назвою вже існує.")
+        return None
+
+    except Exception:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        print("Не вдалося додати категорію.")
+        return None
+
     finally:
         conn.close()
 
@@ -56,7 +80,7 @@ def add_category(name):
 def update_category(category_id, new_name, is_active):
     conn = connect()
     if not conn:
-        return
+        return False
     try:
         with conn.cursor() as cur:
             cur.execute("""
@@ -64,22 +88,66 @@ def update_category(category_id, new_name, is_active):
                 SET name=%s, is_active=%s
                 WHERE id=%s;
             """, (new_name, is_active, category_id))
+
+            if cur.rowcount == 0:
+                conn.rollback()
+                print("Такої категорії немає.")
+                return False
+
         conn.commit()
+        return True
+
+    except errors.UniqueViolation:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        print("Категорія з такою назвою вже існує.")
+        return False
+
+    except Exception:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        print("Не вдалося оновити категорію.")
+        return False
+
     finally:
         conn.close()
 
 
 def delete_category(category_id):
+    """
+    SAFE DELETE: замість реального DELETE робимо деактивацію,
+    щоб не стерти questions/results каскадом.
+    """
     conn = connect()
     if not conn:
-        return
+        return False
     try:
         with conn.cursor() as cur:
             cur.execute(
-                "DELETE FROM categories WHERE id=%s;",
+                "UPDATE categories SET is_active = FALSE WHERE id=%s;",
                 (category_id,)
             )
+
+            if cur.rowcount == 0:
+                conn.rollback()
+                print("Такої категорії немає.")
+                return False
+
         conn.commit()
+        return True
+
+    except Exception:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        print("Не вдалося деактивувати категорію.")
+        return False
+
     finally:
         conn.close()
 
@@ -97,6 +165,13 @@ def list_questions_by_category(category_id):
                 ORDER BY id;
             """, (category_id,))
             return cur.fetchall()
+    except Exception:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        print("Помилка читання питань.")
+        return []
     finally:
         conn.close()
 
@@ -115,6 +190,13 @@ def get_question_by_id(question_id):
                 WHERE id=%s;
             """, (question_id,))
             return cur.fetchone()
+    except Exception:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        print("Помилка читання питання.")
+        return None
     finally:
         conn.close()
 
@@ -134,6 +216,15 @@ def add_question(category_id, text, a, b, c, d, correct):
             new_id = cur.fetchone()[0]
         conn.commit()
         return new_id
+
+    except Exception:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        print("Не вдалося додати питання.")
+        return None
+
     finally:
         conn.close()
 
@@ -141,7 +232,7 @@ def add_question(category_id, text, a, b, c, d, correct):
 def update_question(question_id, text, a, b, c, d, correct):
     conn = connect()
     if not conn:
-        return
+        return False
     try:
         with conn.cursor() as cur:
             cur.execute("""
@@ -154,7 +245,23 @@ def update_question(question_id, text, a, b, c, d, correct):
                     correct_option=%s
                 WHERE id=%s;
             """, (text, a, b, c, d, correct, question_id))
+
+            if cur.rowcount == 0:
+                conn.rollback()
+                print("Такого питання немає.")
+                return False
+
         conn.commit()
+        return True
+
+    except Exception:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        print("Не вдалося оновити питання.")
+        return False
+
     finally:
         conn.close()
 
@@ -162,13 +269,29 @@ def update_question(question_id, text, a, b, c, d, correct):
 def delete_question(question_id):
     conn = connect()
     if not conn:
-        return
+        return False
     try:
         with conn.cursor() as cur:
             cur.execute(
                 "DELETE FROM questions WHERE id=%s;",
                 (question_id,)
             )
+
+            if cur.rowcount == 0:
+                conn.rollback()
+                print("Такого питання немає.")
+                return False
+
         conn.commit()
+        return True
+
+    except Exception:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        print("Не вдалося видалити питання.")
+        return False
+
     finally:
         conn.close()
